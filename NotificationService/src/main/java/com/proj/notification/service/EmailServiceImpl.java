@@ -7,6 +7,7 @@ import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.core.io.ByteArrayResource;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.scheduling.annotation.Async;
@@ -87,7 +88,7 @@ public class EmailServiceImpl implements EmailService {
     }
 
     // TEMPLATE EMAIL
-   @Async
+    @Async
     @Override
     public void sendTemplateEmail(TemplateEmailRequest request) {
         log.info(
@@ -164,12 +165,20 @@ public class EmailServiceImpl implements EmailService {
         try {
             MimeMessage message = mailSender.createMimeMessage();
             MimeMessageHelper helper =
-                    new MimeMessageHelper(message, false);
+                    new MimeMessageHelper(message, true);
 
             helper.setFrom(mailConfig.fromEmail);
             helper.setTo(to);
             helper.setSubject(subject);
             helper.setText(body, true);
+
+            if (templateDefaults.getLogoPath() != null) {
+                helper.addInline(
+                        "logo",
+                        new ClassPathResource(templateDefaults.getLogoPath()),
+                        templateDefaults.getLogoContentType()
+                );
+            }
 
             mailSender.send(message);
             log.info("Email sent successfully to {}", to);
@@ -180,42 +189,49 @@ public class EmailServiceImpl implements EmailService {
                     "Unable to send email at this moment", e
             );
         }
-
     }
 
-    private void sendMailWithAttachment(
-            String to,
-            String subject,
-            String body,
-            AttachmentData attachment
-    ) {
-        try {
-            MimeMessage message = mailSender.createMimeMessage();
-            MimeMessageHelper helper =
-                    new MimeMessageHelper(message, true);
 
-            helper.setFrom(mailConfig.fromEmail);
-            helper.setTo(to);
-            helper.setSubject(subject);
-            helper.setText(body, true);
+private void sendMailWithAttachment(
+        String to,
+        String subject,
+        String body,
+        AttachmentData attachment
+) {
+    try {
+        MimeMessage message = mailSender.createMimeMessage();
+        MimeMessageHelper helper =
+                new MimeMessageHelper(message, true);
 
-            helper.addAttachment(
-                    attachment.getFileName(),
-                    new ByteArrayResource(attachment.getData()),
-                    attachment.getContentType()
-            );
+        helper.setFrom(mailConfig.fromEmail);
+        helper.setTo(to);
+        helper.setSubject(subject);
+        helper.setText(body, true);
 
-            mailSender.send(message);
-            log.info("Email with attachment sent to {}", to);
-
-        }catch (Exception e) {
-            log.error("Email sending failed to {}", to, e);
-            throw new EmailSendException(
-                    "Unable to send email at this moment", e
+        if (templateDefaults.getLogoPath() != null) {
+            helper.addInline(
+                    "logo",
+                    new ClassPathResource(templateDefaults.getLogoPath()),
+                    templateDefaults.getLogoContentType()
             );
         }
 
+        helper.addAttachment(
+                attachment.getFileName(),
+                new ByteArrayResource(attachment.getData()),
+                attachment.getContentType()
+        );
+
+        mailSender.send(message);
+        log.info("Email with attachment sent to {}", to);
+
+    } catch (Exception e) {
+        log.error("Email sending failed to {}", to, e);
+        throw new EmailSendException(
+                "Unable to send email at this moment", e
+        );
     }
+}
 
     private void validateRequest(EmailRequest request) {
         if (request == null || request.getTo() == null) {
